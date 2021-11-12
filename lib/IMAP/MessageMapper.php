@@ -161,15 +161,25 @@ class MessageMapper {
 			$this->logger->debug("Range for findAll did not find any messages. Trying again with a succeeding range");
 			return $this->findAll($client, $mailbox, $maxResults, $upper);
 		}
+
+		$uidCandidates = array_filter(
+			array_map(
+				function (Horde_Imap_Client_Data_Fetch $data) {
+					return $data->getUid();
+				},
+				iterator_to_array($fetchResult)
+			),
+			function (int $uid) use ($highestKnownUid) {
+				// Don't load the ones we already know
+				return $uid > $highestKnownUid;
+			}
+		);
+		// We don't know if the server already sorted the UIDs
+		sort($uidCandidates);
+
 		$uidsToFetch = array_slice(
 			array_filter(
-				array_map(
-					function (Horde_Imap_Client_Data_Fetch $data) {
-						return $data->getUid();
-					},
-					iterator_to_array($fetchResult)
-				),
-
+				$uidCandidates,
 				function (int $uid) use ($highestKnownUid) {
 					// Don't load the ones we already know
 					return $uid > $highestKnownUid;
@@ -178,6 +188,8 @@ class MessageMapper {
 			0,
 			$maxResults
 		);
+		$this->logger->debug(sprintf("Range for findAll min=$min max=$max found %d messages, %d left after filtering", count($uidCandidates), count($uidsToFetch)));
+
 		return [
 			'messages' => $this->findByIds(
 				$client,
