@@ -115,6 +115,7 @@ class MessageMapper {
 
 		if ($total === 0) {
 			// Nothing to fetch for this mailbox
+			$this->logger->debug("Mailbox $mailbox is empty");
 			return [
 				'messages' => [],
 				'all' => true,
@@ -149,10 +150,10 @@ class MessageMapper {
 				'ids' => new Horde_Imap_Client_Ids($lower . ':' . $upper)
 			]
 		);
-		if (count($fetchResult) === 0 && $upper < $max) {
+		if (count($fetchResult) === 0) {
 			/*
-			 * There were no messages in this range, but we've not reached the
-			 * latest message. This means we should try again until there is a
+			 * There were no messages in this range.
+			 * This means we should try again until there is a
 			 * page that actually returns at least one message
 			 *
 			 * We take $upper as the lowest known UID as we just found out that
@@ -178,25 +179,25 @@ class MessageMapper {
 		sort($uidCandidates);
 
 		$uidsToFetch = array_slice(
-			array_filter(
-				$uidCandidates,
-				function (int $uid) use ($highestKnownUid) {
-					// Don't load the ones we already know
-					return $uid > $highestKnownUid;
-				}
-			),
+			$uidCandidates,
 			0,
 			$maxResults
 		);
-		$this->logger->debug(sprintf("Range for findAll min=$min max=$max found %d messages, %d left after filtering", count($uidCandidates), count($uidsToFetch)));
 
+		$highestUidFetched = $uidsToFetch[count($uidsToFetch) - 1];
+		$this->logger->debug(sprintf("Range for findAll min=$min max=$max found %d messages, %d left after filtering. Highest UID fetched is %d", count($uidCandidates), count($uidsToFetch), $highestUidFetched));
+		if ($highestUidFetched === $max) {
+			$this->logger->debug("All messages of mailbox $mailbox have been fetched");
+		} else {
+			$this->logger->debug("Mailbox $mailbox has more messages to fetch");
+		}
 		return [
 			'messages' => $this->findByIds(
 				$client,
 				$mailbox,
 				$uidsToFetch
 			),
-			'all' => $upper === $max,
+			'all' => $highestUidFetched === $max,
 			'total' => $total,
 		];
 	}

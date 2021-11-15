@@ -309,7 +309,9 @@ class ImapToDbSynchronizer {
 			// We might need more attempts to fill the cache
 			$perf->end();
 
+
 			$loggingMailboxId = $account->getId() . ':' . $mailbox->getName();
+			$logger->debug("$loggingMailboxId has more messages. Another sync will be necessary");
 			$total = $imapMessages['total'];
 			$cached = count($this->messageMapper->findAllUids($mailbox));
 			throw new IncompleteSyncException("Initial sync is not complete for $loggingMailboxId ($cached of $total messages cached).");
@@ -319,6 +321,7 @@ class ImapToDbSynchronizer {
 		$mailbox->setSyncChangedToken($client->getSyncToken($mailbox->getName()));
 		$mailbox->setSyncVanishedToken($client->getSyncToken($mailbox->getName()));
 		$this->mailboxMapper->update($mailbox);
+		$perf->step('unlock mailbox');
 
 		$perf->end();
 	}
